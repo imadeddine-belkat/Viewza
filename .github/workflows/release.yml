@@ -1,0 +1,44 @@
+name: Build and Release Tauri App
+
+# Trigger the action only when a tag starting with 'v' is pushed
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    permissions:
+      contents: write # Required for the action to create a GitHub Release
+    
+    # We are using Windows to generate the .exe
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20' # or whatever version you prefer
+          cache: 'npm'
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        run: npm install
+
+      - name: Build and Publish Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          # This token is automatically provided by GitHub Actions
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # Automatically uses the version from your tauri.conf.json
+          tagName: v__VERSION__
+          releaseName: 'Viewza v__VERSION__'
+          releaseBody: 'Automated release for Viewza.'
+          releaseDraft: false
+          prerelease: false
