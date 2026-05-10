@@ -11,7 +11,7 @@ import type { LiveStream, VodStream } from "@/lib/xtream/types";
  * Centralizes playback dispatch.
  *
  * - Live and VOD return `activeStream` / `activeMovie` so the caller
- *   can render PlayerModal when set.
+ * can render PlayerModal when set.
  * - VLC mode opens externally and never sets state.
  * - Series uses a separate flow because it needs an episode picker.
  */

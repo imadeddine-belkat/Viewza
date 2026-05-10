@@ -8,7 +8,7 @@ import { getLiveCategories, getLiveStreams } from "@/lib/xtream/api";
 import { buildStreamUrl } from "@/features/player/streamUrl"; // Adjust path if needed
 import { useAuthStore } from "@/stores/authStore";
 import { ALL_CATEGORIES_ID } from "@/lib/xtream/constants";
-import {usePlayMedia} from "@/features/player/usePlayMedia.ts";
+import { usePlayMedia } from "@/features/player/usePlayMedia";
 
 export function LiveScreen() {
     const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);

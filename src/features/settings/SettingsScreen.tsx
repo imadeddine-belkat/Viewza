@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Trash2, CheckCircle2, Plus, MonitorPlay } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
+import { usePlatformStore } from "@/stores/platformStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useAuthStore } from "@/stores/authStore";
 import { Input } from "@/components/ui/input";
@@ -15,6 +16,7 @@ export function SettingsScreen() {
     const { playerType, setPlayerType, vlcPath, setVlcPath } = useSettingsStore();
     const { playlists, activeId, removePlaylist, setActivePlaylist } = useAuthStore();
     const [isAddingNew, setIsAddingNew] = useState(false);
+    const isDesktop = usePlatformStore((s) => s.isDesktop);
 
     const pruneFavorites = useFavoriteStore((s) => s.pruneByPlaylist);
 
@@ -88,23 +90,25 @@ export function SettingsScreen() {
                             </div>
                         </label>
 
-                        <label className="flex items-start gap-3 cursor-pointer p-3 border rounded-md hover:bg-accent transition-colors flex-1">
-                            <input
-                                type="radio"
-                                name="playerType"
-                                value="vlc"
-                                checked={playerType === "vlc"}
-                                onChange={() => setPlayerType("vlc")}
-                                className="w-4 h-4 mt-1"
-                            />
-                            <div>
-                                <div className="font-medium">Native VLC Player</div>
-                                <div className="text-xs text-muted-foreground">Opens the VLC desktop app. Best for 4K.</div>
-                            </div>
-                        </label>
+                        {isDesktop && (
+                            <label className="flex items-start gap-3 cursor-pointer p-3 border rounded-md hover:bg-accent transition-colors flex-1">
+                                <input
+                                    type="radio"
+                                    name="playerType"
+                                    value="vlc"
+                                    checked={playerType === "vlc"}
+                                    onChange={() => setPlayerType("vlc")}
+                                    className="w-4 h-4 mt-1"
+                                />
+                                <div>
+                                    <div className="font-medium">Native VLC Player</div>
+                                    <div className="text-xs text-muted-foreground">Opens the VLC desktop app. Best for 4K.</div>
+                                </div>
+                            </label>
+                        )}
                     </div>
 
-                    {playerType === "vlc" && (
+                    {isDesktop && playerType === "vlc" && (
                         <div className="pt-2 space-y-2">
                             <label className="text-sm font-medium">Custom VLC Path (Optional)</label>
                             <div className="flex gap-2">

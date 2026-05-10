@@ -1,5 +1,6 @@
 mod state;
 mod xtream;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 mod proxy;
 
 use state::{AppState, AppStateInner, Session};
@@ -76,6 +77,7 @@ async fn xtream_get_live_categories(
         .await
 }
 
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
 fn play_in_vlc(url: String, vlc_path: Option<String>) -> Result<(), String> {
     let mut spawned = false;
@@ -122,8 +124,9 @@ fn play_in_vlc(url: String, vlc_path: Option<String>) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .setup(|_app| {
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
             tauri::async_runtime::spawn(async {
                 proxy::start_proxy().await;
             });
@@ -131,23 +134,45 @@ pub fn run() {
         })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .manage::<AppState>(AppState::new(AppStateInner::default()))
-        .invoke_handler(tauri::generate_handler![
-                    xtream_login,
-                    xtream_set_session,
-                    xtream_clear_session,
-                    xtream_get_live_categories,
-                    xtream_get_live_streams,
-                    xtream_get_vod_categories,
-                    xtream_get_vod_streams,
-                    xtream_get_series_categories,
-                    xtream_get_series,
-                    xtream_get_series_info,
-                    xtream_get_short_epg,
-                    play_in_vlc,
-                ])
-                .run(tauri::generate_context!())
-                .expect("error while running tauri application");
+        .plugin(tauri_plugin_os::init())
+        .manage::<AppState>(AppState::new(AppStateInner::default()));
+
+    // Different handler set per platform
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    let builder = builder.invoke_handler(tauri::generate_handler![
+        xtream_login,
+        xtream_set_session,
+        xtream_clear_session,
+        xtream_get_live_categories,
+        xtream_get_live_streams,
+        xtream_get_vod_categories,
+        xtream_get_vod_streams,
+        xtream_get_series_categories,
+        xtream_get_series,
+        xtream_get_series_info,
+        xtream_get_short_epg,
+        play_in_vlc,
+    ]);
+
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    let builder = builder.invoke_handler(tauri::generate_handler![
+        xtream_login,
+        xtream_set_session,
+        xtream_clear_session,
+        xtream_get_live_categories,
+        xtream_get_live_streams,
+        xtream_get_vod_categories,
+        xtream_get_vod_streams,
+        xtream_get_series_categories,
+        xtream_get_series,
+        xtream_get_series_info,
+        xtream_get_short_epg,
+        // play_in_vlc intentionally omitted on mobile
+    ]);
+
+    builder
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
 }
 
 #[tauri::command]

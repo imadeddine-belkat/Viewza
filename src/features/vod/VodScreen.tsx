@@ -47,11 +47,15 @@ export function VodScreen() {
     // Filter + adapt to PosterGrid shape
     const cards = useMemo<VodCard[]>(() => {
         const movies = streamsQuery.data ?? [];
+
+        const searchTerms = debouncedSearch.toLowerCase().trim().split(/\s+/);
+
         const filtered = !debouncedSearch.trim()
             ? movies
-            : movies.filter((m) =>
-                m.name.toLowerCase().includes(debouncedSearch.toLowerCase()),
-            );
+            : movies.filter((m) => {
+                const movieName = m.name.toLowerCase();
+                return searchTerms.every(term => movieName.includes(term));
+            });
 
         return filtered.map((m) => ({
             ...m,

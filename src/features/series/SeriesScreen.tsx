@@ -42,11 +42,15 @@ export function SeriesScreen() {
 
     const cards = useMemo<SeriesCard[]>(() => {
         const series = seriesQuery.data ?? [];
+
+        const searchTerms = debouncedSearch.toLowerCase().trim().split(/\s+/);
+
         const filtered = !debouncedSearch.trim()
             ? series
-            : series.filter((s) =>
-                s.name.toLowerCase().includes(debouncedSearch.toLowerCase()),
-            );
+            : series.filter((s) => {
+                const seriesName = s.name.toLowerCase();
+                return searchTerms.every(term => seriesName.includes(term));
+            });
 
         return filtered.map((s) => ({
             ...s,

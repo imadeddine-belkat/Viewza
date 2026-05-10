@@ -18,8 +18,15 @@ export function ChannelGrid({ streams, onSelect }: Props) {
 
     const filtered = useMemo(() => {
         if (!search.trim()) return streams;
-        const q = search.toLowerCase();
-        return streams.filter((s) => s.name.toLowerCase().includes(q));
+
+        // Split the search query into an array of lowercase words
+        const searchTerms = search.toLowerCase().trim().split(/\s+/);
+
+        return streams.filter((s) => {
+            const channelName = s.name.toLowerCase();
+            // Ensure EVERY search term exists somewhere in the channel name
+            return searchTerms.every(term => channelName.includes(term));
+        });
     }, [streams, search]);
 
     const virtualizer = useVirtualizer({
@@ -92,11 +99,21 @@ function ChannelRow({ stream, onSelect, style }: RowProps) {
     const activeId = useAuthStore((s) => s.activeId);
     const isFav = activeId ? isLiveFav(stream.stream_id, activeId) : false;
 
+    const handlePlay = () => onSelect(stream);
+
     return (
-        <button
+        <div
             style={style}
-            onClick={() => onSelect(stream)}
-            className="flex items-center gap-3 px-4 py-2 hover:bg-accent/50 transition-colors w-full text-left border-b border-border/40 group"
+            onClick={handlePlay}
+            onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    handlePlay();
+                }
+            }}
+            role="button"
+            tabIndex={0}
+            className="flex items-center gap-3 px-4 py-2 hover:bg-accent/50 transition-colors w-full text-left border-b border-border/40 group cursor-pointer focus:outline-none focus:bg-accent/50"
         >
             <div className="flex-shrink-0 w-12 h-12 bg-muted rounded flex items-center justify-center overflow-hidden">
                 {showImage ? (
@@ -124,16 +141,16 @@ function ChannelRow({ stream, onSelect, style }: RowProps) {
                 </p>
             </div>
 
-            {/* ADD THIS BUTTON: Toggle Favorite */}
             <button
                 onClick={(e) => {
                     e.stopPropagation();
                     if (activeId) toggleLive(stream, activeId);
                 }}
                 className="p-2 opacity-0 group-hover:opacity-100 hover:text-yellow-500 transition-all"
+                aria-label={isFav ? "Remove from favorites" : "Add to favorites"}
             >
                 <Star className={cn("w-5 h-5", isFav && "fill-yellow-500 text-yellow-500 opacity-100")} />
             </button>
-        </button>
+        </div>
     );
 }
