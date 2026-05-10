@@ -1,0 +1,145 @@
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Search } from "lucide-react";
+
+import { CategoryList } from "../live/CategoryList";
+import { Input } from "@/components/ui/input";
+import { PosterGrid, type PosterItem } from "@/components/shared/PosterGrid";
+import { PlayerModal } from "@/features/player/PlayerModal";
+import { buildStreamUrl } from "@/features/player/streamUrl";
+import { useAuthStore } from "@/stores/authStore";
+import { useFavoriteStore } from "@/stores/favoriteStore";
+import { usePlayMedia } from "@/features/player/usePlayMedia";
+import { getVodCategories, getVodStreams } from "@/lib/xtream/api";
+import { ALL_CATEGORIES_ID } from "@/lib/xtream/constants";
+import { useDebounce } from "@/lib/hooks/useDebounce";
+import type { VodStream } from "@/lib/xtream/types";
+
+// Adapter: VodStream → what PosterGrid expects
+type VodCard = PosterItem & VodStream;
+
+export function VodScreen() {
+    const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+    const [search, setSearch] = useState("");
+    const debouncedSearch = useDebounce(search, 150);
+
+    const profile = useAuthStore((s) => s.profile);
+    const activeId = useAuthStore((s) => s.activeId);
+    const { toggleVod, isVodFav } = useFavoriteStore();
+    const { activeMovie, setActiveMovie, playMovie } = usePlayMedia();
+
+    const categoriesQuery = useQuery({
+        queryKey: ["vod-categories"],
+        queryFn: getVodCategories,
+    });
+
+    const streamsQuery = useQuery({
+        queryKey: ["vod-streams", selectedCategoryId],
+        queryFn: () => {
+            if (selectedCategoryId === ALL_CATEGORIES_ID) {
+                return getVodStreams();
+            }
+            return getVodStreams(selectedCategoryId ?? undefined);
+        },
+        enabled: !!selectedCategoryId,
+    });
+
+    // Filter + adapt to PosterGrid shape
+    const cards = useMemo<VodCard[]>(() => {
+        const movies = streamsQuery.data ?? [];
+        const filtered = !debouncedSearch.trim()
+            ? movies
+            : movies.filter((m) =>
+                m.name.toLowerCase().includes(debouncedSearch.toLowerCase()),
+            );
+
+        return filtered.map((m) => ({
+            ...m,
+            id: m.stream_id,
+            title: m.name,
+            image: m.stream_icon,
+            isFav: activeId ? isVodFav(m.stream_id, activeId) : false,
+        }));
+    }, [streamsQuery.data, debouncedSearch, activeId, isVodFav]);
+
+    return (
+        <div className="flex h-full overflow-hidden bg-background">
+            <div className="w-64 flex-shrink-0">
+                <CategoryList
+                    categories={categoriesQuery.data ?? []}
+                    selectedId={selectedCategoryId}
+                    onSelect={setSelectedCategoryId}
+                    allLabel="All Movies"
+                />
+            </div>
+
+            <div className="flex-1 flex flex-col overflow-hidden">
+                <div className="p-3 border-b border-border">
+                    <div className="relative">
+                        <Search className="h-4 w-4 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                            placeholder={
+                                selectedCategoryId
+                                    ? "Search movies…"
+                                    : "Select a category to search"
+                            }
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            className="pl-8 h-9"
+                            disabled={!selectedCategoryId}
+                        />
+                    </div>
+                    {streamsQuery.data && (
+                        <p className="text-xs text-muted-foreground mt-2">
+                            {cards.length} of {streamsQuery.data.length} movies
+                        </p>
+                    )}
+                </div>
+
+                <div className="flex-1 overflow-hidden">
+                    {!selectedCategoryId && (
+                        <div className="h-full flex items-center justify-center text-muted-foreground">
+                            Select a category to browse movies
+                        </div>
+                    )}
+
+                    {streamsQuery.isLoading && (
+                        <div className="h-full flex items-center justify-center text-muted-foreground">
+                            Loading movies…
+                        </div>
+                    )}
+
+                    {streamsQuery.error && (
+                        <div className="h-full flex items-center justify-center text-destructive">
+                            Error: {(streamsQuery.error as Error).message}
+                        </div>
+                    )}
+
+                    {selectedCategoryId && streamsQuery.data && (
+                        <PosterGrid<VodCard>
+                            items={cards}
+                            onClick={(card) => playMovie(card)}
+                            onToggleFav={(card) => activeId && toggleVod(card, activeId)}
+                        />
+                    )}
+                </div>
+            </div>
+
+            <PlayerModal
+                url={
+                    activeMovie && profile
+                        ? buildStreamUrl(
+                            profile,
+                            activeMovie.stream_id,
+                            "movie",
+                            activeMovie.container_extension || "mp4",
+                        )
+                        : null
+                }
+                title={activeMovie?.name || "Movie"}
+                icon={activeMovie?.stream_icon}
+                onClose={() => setActiveMovie(null)}
+            />
+        </div>
+    );
+}
