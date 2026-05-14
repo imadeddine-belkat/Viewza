@@ -15,7 +15,6 @@ import { ALL_CATEGORIES_ID } from "@/lib/xtream/constants";
 import { useDebounce } from "@/lib/hooks/useDebounce";
 import type { VodStream } from "@/lib/xtream/types";
 
-// Adapter: VodStream → what PosterGrid expects
 type VodCard = PosterItem & VodStream;
 
 export function VodScreen() {
@@ -23,28 +22,28 @@ export function VodScreen() {
     const [search, setSearch] = useState("");
     const debouncedSearch = useDebounce(search, 150);
 
-    const profile = useAuthStore((s) => s.profile);
+    const activePlaylist = useAuthStore((s) => s.activePlaylist);
     const activeId = useAuthStore((s) => s.activeId);
     const { toggleVod, isVodFav } = useFavoriteStore();
     const { activeMovie, setActiveMovie, playMovie } = usePlayMedia();
 
     const categoriesQuery = useQuery({
-        queryKey: ["vod-categories"],
+        queryKey: ["vod-categories", activePlaylist?.id],
         queryFn: getVodCategories,
+        enabled: !!activePlaylist && activePlaylist.type === "xtream",
     });
 
     const streamsQuery = useQuery({
-        queryKey: ["vod-streams", selectedCategoryId],
+        queryKey: ["vod-streams", selectedCategoryId, activePlaylist?.id],
         queryFn: () => {
             if (selectedCategoryId === ALL_CATEGORIES_ID) {
                 return getVodStreams();
             }
             return getVodStreams(selectedCategoryId ?? undefined);
         },
-        enabled: !!selectedCategoryId,
+        enabled: !!selectedCategoryId && !!activePlaylist && activePlaylist.type === "xtream",
     });
 
-    // Filter + adapt to PosterGrid shape
     const cards = useMemo<VodCard[]>(() => {
         const movies = streamsQuery.data ?? [];
 
@@ -54,7 +53,7 @@ export function VodScreen() {
             ? movies
             : movies.filter((m) => {
                 const movieName = m.name.toLowerCase();
-                return searchTerms.every(term => movieName.includes(term));
+                return searchTerms.every((term) => movieName.includes(term));
             });
 
         return filtered.map((m) => ({
@@ -65,6 +64,24 @@ export function VodScreen() {
             isFav: activeId ? isVodFav(m.stream_id, activeId) : false,
         }));
     }, [streamsQuery.data, debouncedSearch, activeId, isVodFav]);
+
+    const getMovieUrl = () => {
+        if (!activeMovie || !activePlaylist || activePlaylist.type !== "xtream") return null;
+        return buildStreamUrl(
+            activePlaylist,
+            activeMovie.stream_id,
+            "movie",
+            activeMovie.container_extension || "mp4",
+        );
+    };
+
+    if (activePlaylist?.type === "m3u") {
+        return (
+            <div className="h-full flex items-center justify-center text-muted-foreground p-8 text-center">
+                Movies are not available for M3U playlists. Switch to an Xtream playlist to browse VOD.
+            </div>
+        );
+    }
 
     return (
         <div className="flex h-full overflow-hidden bg-background">
@@ -83,9 +100,7 @@ export function VodScreen() {
                         <Search className="h-4 w-4 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
                         <Input
                             placeholder={
-                                selectedCategoryId
-                                    ? "Search movies…"
-                                    : "Select a category to search"
+                                selectedCategoryId ? "Search movies…" : "Select a category to search"
                             }
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
@@ -130,16 +145,7 @@ export function VodScreen() {
             </div>
 
             <PlayerModal
-                url={
-                    activeMovie && profile
-                        ? buildStreamUrl(
-                            profile,
-                            activeMovie.stream_id,
-                            "movie",
-                            activeMovie.container_extension || "mp4",
-                        )
-                        : null
-                }
+                url={getMovieUrl()}
                 title={activeMovie?.name || "Movie"}
                 icon={activeMovie?.stream_icon}
                 onClose={() => setActiveMovie(null)}

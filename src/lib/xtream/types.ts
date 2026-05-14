@@ -52,6 +52,7 @@ export interface LiveStream {
     category_id: string;
     tv_archive: number;
     tv_archive_duration: number;
+    url?: string;
 }
 
 export interface VodStream {

@@ -2,23 +2,24 @@ import { useState } from "react";
 import { xtreamSetSession, xtreamLogin } from "@/lib/tauri";
 import { open } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
-import { Trash2, CheckCircle2, Plus, MonitorPlay } from "lucide-react";
+import { Trash2, CheckCircle2, Plus, MonitorPlay, Tv, Link2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { usePlatformStore } from "@/stores/platformStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useAuthStore } from "@/stores/authStore";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {useFavoriteStore} from "@/stores/favoriteStore.ts";
+import { useFavoriteStore } from "@/stores/favoriteStore.ts";
 
 export function SettingsScreen() {
     const { playerType, setPlayerType, vlcPath, setVlcPath } = useSettingsStore();
     const { playlists, activeId, removePlaylist, setActivePlaylist } = useAuthStore();
     const [isAddingNew, setIsAddingNew] = useState(false);
     const isDesktop = usePlatformStore((s) => s.isDesktop);
-
     const pruneFavorites = useFavoriteStore((s) => s.pruneByPlaylist);
+    const queryClient = useQueryClient();
 
     const handleBrowseVlc = async () => {
         try {
@@ -35,39 +36,37 @@ export function SettingsScreen() {
         }
     };
 
-    const queryClient = useQueryClient();
-
-    // This is the magic function that switches playlists in Rust!
     const handleConnect = async (id: string) => {
-        const targetPlaylist = playlists.find(p => p.id === id);
+        const targetPlaylist = playlists.find((p) => p.id === id);
         if (!targetPlaylist) return;
 
         try {
-            // 1. Switch Rust session
-            await xtreamSetSession({
-                host: targetPlaylist.host,
-                port: targetPlaylist.port,
-                username: targetPlaylist.username,
-                password: targetPlaylist.password,
-            });
+            // Only Xtream needs the Rust session — M3U has no session concept
+            if (targetPlaylist.type === "xtream") {
+                await xtreamSetSession({
+                    host: targetPlaylist.host,
+                    port: targetPlaylist.port,
+                    username: targetPlaylist.username,
+                    password: targetPlaylist.password,
+                });
+            }
 
-            // 2. Switch active playlist in Zustand
             setActivePlaylist(id);
-
-            // 3. Wipe React Query cache so screens refetch with new credentials
             queryClient.clear();
 
             toast.success(`Connected to ${targetPlaylist.name}`);
         } catch (error) {
             toast.error("Failed to connect to playlist.");
         }
-    }
+    };
 
     return (
         <div className="p-6 max-w-4xl mx-auto space-y-8">
             <div>
                 <h1 className="text-2xl font-bold">Settings</h1>
-                <p className="text-muted-foreground">Manage your player preferences and IPTV playlists.</p>
+                <p className="text-muted-foreground">
+                    Manage your player preferences and IPTV playlists.
+                </p>
             </div>
 
             {/* --- PLAYER SETTINGS --- */}
@@ -86,7 +85,9 @@ export function SettingsScreen() {
                             />
                             <div>
                                 <div className="font-medium">Web Player (Artplayer)</div>
-                                <div className="text-xs text-muted-foreground">Best for seamless UI. Fails on 4K/Dolby.</div>
+                                <div className="text-xs text-muted-foreground">
+                                    Best for seamless UI. Fails on 4K/Dolby.
+                                </div>
                             </div>
                         </label>
 
@@ -102,7 +103,9 @@ export function SettingsScreen() {
                                 />
                                 <div>
                                     <div className="font-medium">Native VLC Player</div>
-                                    <div className="text-xs text-muted-foreground">Opens the VLC desktop app. Best for 4K.</div>
+                                    <div className="text-xs text-muted-foreground">
+                                        Opens the VLC desktop app. Best for 4K.
+                                    </div>
                                 </div>
                             </label>
                         )}
@@ -141,25 +144,45 @@ export function SettingsScreen() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Existing Playlists */}
                     {playlists.map((pl) => (
                         <div
                             key={pl.id}
                             className={`p-4 rounded-xl border flex flex-col justify-between ${
-                                activeId === pl.id ? "border-primary bg-primary/5" : "border-border bg-card"
+                                activeId === pl.id
+                                    ? "border-primary bg-primary/5"
+                                    : "border-border bg-card"
                             }`}
                         >
                             <div className="flex justify-between items-start mb-4">
-                                <div>
+                                <div className="min-w-0 flex-1">
                                     <h3 className="font-bold text-lg flex items-center gap-2">
-                                        <MonitorPlay className="w-5 h-5 text-muted-foreground" />
-                                        {pl.name}
+                                        {pl.type === "xtream" ? (
+                                            <MonitorPlay className="w-5 h-5 text-muted-foreground" />
+                                        ) : (
+                                            <Link2 className="w-5 h-5 text-muted-foreground" />
+                                        )}
+                                        <span className="truncate">{pl.name}</span>
                                     </h3>
-                                    <p className="text-xs text-muted-foreground mt-1">Host: {pl.host}:{pl.port}</p>
-                                    <p className="text-xs text-muted-foreground">User: {pl.username}</p>
+                                    {pl.type === "xtream" ? (
+                                        <>
+                                            <p className="text-xs text-muted-foreground mt-1 truncate">
+                                                {pl.host}:{pl.port}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground truncate">
+                                                User: {pl.username}
+                                            </p>
+                                        </>
+                                    ) : (
+                                        <p className="text-xs text-muted-foreground mt-1 truncate" title={pl.m3uUrl}>
+                                            M3U: {pl.m3uUrl}
+                                        </p>
+                                    )}
+                                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground mt-1 font-medium">
+                                        {pl.type === "xtream" ? "Xtream Codes" : "M3U Playlist"}
+                                    </p>
                                 </div>
                                 {activeId === pl.id && (
-                                    <span className="flex items-center gap-1 text-xs bg-primary/20 text-primary px-2 py-1 rounded-full font-medium">
+                                    <span className="flex items-center gap-1 text-xs bg-primary/20 text-primary px-2 py-1 rounded-full font-medium flex-shrink-0 ml-2">
                                         <CheckCircle2 className="w-3 h-3" /> Active
                                     </span>
                                 )}
@@ -189,10 +212,9 @@ export function SettingsScreen() {
                         </div>
                     ))}
 
-                    {/* Add New Playlist Form */}
                     {isAddingNew && (
-                        <div className="p-4 rounded-xl border border-primary/50 bg-card">
-                            <XtreamSettingsForm onSuccess={() => setIsAddingNew(false)} />
+                        <div className="p-4 rounded-xl border border-primary/50 bg-card md:col-span-2">
+                            <AddPlaylistForm onSuccess={() => setIsAddingNew(false)} />
                         </div>
                     )}
                 </div>
@@ -202,12 +224,13 @@ export function SettingsScreen() {
 }
 
 // --- SUB-COMPONENT: ADD PLAYLIST FORM ---
-export function XtreamSettingsForm({ onSuccess }: { onSuccess?: () => void }) {
-    // 1. Grab addPlaylist instead of setProfile!
+function AddPlaylistForm({ onSuccess }: { onSuccess?: () => void }) {
     const addPlaylist = useAuthStore((s) => s.addPlaylist);
     const [isLoading, setIsLoading] = useState(false);
+    const [activeTab, setActiveTab] = useState<"xtream" | "m3u">("xtream");
 
-    const [formData, setFormData] = useState({
+    // ─── Xtream form ───────────────────────────
+    const [xtreamForm, setXtreamForm] = useState({
         name: "",
         host: "",
         port: "80",
@@ -215,86 +238,221 @@ export function XtreamSettingsForm({ onSuccess }: { onSuccess?: () => void }) {
         password: "",
     });
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    const handleXtreamChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setXtreamForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
     };
 
-    const handleSave = async (e: React.FormEvent) => {
+    const handleXtreamSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
 
         try {
-            const portNum = parseInt(formData.port, 10);
-            if (isNaN(portNum)) throw new Error("Port must be a valid number");
+            const portNum = parseInt(xtreamForm.port, 10);
+            if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
+                throw new Error("Port must be between 1 and 65535");
+            }
 
-            // Verify credentials with Rust
+            const cleanHost = xtreamForm.host
+                .trim()
+                .replace(/^https?:\/\//, "")
+                .replace(/\/$/, "");
+
+            if (!cleanHost) throw new Error("Host is required");
+
             const response = await xtreamLogin({
-                host: formData.host,
+                host: cleanHost,
                 port: portNum,
-                username: formData.username,
-                password: formData.password,
+                username: xtreamForm.username.trim(),
+                password: xtreamForm.password,
             });
 
-            // 2. Add to the new Zustand array!
             addPlaylist({
-                id: crypto.randomUUID(), // Generate unique ID
-                name: formData.name || formData.host, // Fallback to host if no name provided
-                host: formData.host,
+                id: crypto.randomUUID(),
+                name: xtreamForm.name.trim() || cleanHost,
+                type: "xtream",
+                host: cleanHost,
                 port: portNum,
-                username: formData.username,
-                password: formData.password,
+                username: xtreamForm.username.trim(),
+                password: xtreamForm.password,
                 status: response.user_info.status,
                 maxConnections: parseInt(response.user_info.max_connections || "0"),
             });
 
-            toast.success("Playlist added successfully!");
-            if (onSuccess) onSuccess(); // Close form if it's in a modal/toggle
+            toast.success("Playlist added");
+            onSuccess?.();
         } catch (error) {
-            toast.error(`Failed to verify: ${String(error)}`);
+            toast.error(`Failed: ${String(error)}`);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // ─── M3U form ──────────────────────────────
+    const [m3uForm, setM3uForm] = useState({
+        name: "",
+        m3uUrl: "",
+    });
+
+    const handleM3UChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setM3uForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    };
+
+    const handleM3USubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsLoading(true);
+
+        try {
+            const url = m3uForm.m3uUrl.trim();
+            if (!url) throw new Error("M3U URL is required");
+
+            try {
+                new URL(url);
+            } catch {
+                throw new Error("Invalid URL format");
+            }
+
+            addPlaylist({
+                id: crypto.randomUUID(),
+                name: m3uForm.name.trim() || "M3U Playlist",
+                type: "m3u",
+                m3uUrl: url,
+            });
+
+            toast.success("Playlist added");
+            onSuccess?.();
+        } catch (error) {
+            toast.error(`Failed: ${String(error)}`);
         } finally {
             setIsLoading(false);
         }
     };
 
     return (
-        <form onSubmit={handleSave} className="space-y-4 flex flex-col h-full bg-card border border-border p-4 rounded-xl">
-            <h3 className="font-semibold text-sm">Add New Credentials</h3>
-
-            <div className="space-y-1">
-                <label className="text-xs font-medium">Playlist Name</label>
-                <Input name="name" placeholder="e.g. My Premium IPTV" value={formData.name} onChange={handleChange} required />
-            </div>
-
-            <div className="grid grid-cols-4 gap-2">
-                <div className="col-span-3 space-y-1">
-                    <label className="text-xs font-medium">Host / URL</label>
-                    <Input name="host" placeholder="myprovider.com" value={formData.host} onChange={handleChange} required />
-                </div>
-                <div className="col-span-1 space-y-1">
-                    <label className="text-xs font-medium">Port</label>
-                    <Input name="port" type="number" value={formData.port} onChange={handleChange} required />
-                </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                    <label className="text-xs font-medium">Username</label>
-                    <Input name="username" value={formData.username} onChange={handleChange} required />
-                </div>
-                <div className="space-y-1">
-                    <label className="text-xs font-medium">Password</label>
-                    <Input name="password" type="password" value={formData.password} onChange={handleChange} required />
-                </div>
-            </div>
-
-            <div className="mt-auto pt-2 flex gap-2">
+        <div className="space-y-4">
+            <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-sm">Add New Playlist</h3>
                 {onSuccess && (
-                    <Button type="button" variant="ghost" className="flex-1" onClick={onSuccess}>Cancel</Button>
+                    <Button type="button" variant="ghost" size="sm" onClick={onSuccess}>
+                        Cancel
+                    </Button>
                 )}
-                <Button type="submit" disabled={isLoading} className="flex-1">
-                    {isLoading ? "Checking..." : "Add & Connect"}
-                </Button>
             </div>
-        </form>
+
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "xtream" | "m3u")}>
+                <TabsList className="grid w-full grid-cols-2 h-9">
+                    <TabsTrigger value="xtream" disabled={isLoading}>
+                        <Tv className="w-3.5 h-3.5 mr-1.5" /> Xtream Codes
+                    </TabsTrigger>
+                    <TabsTrigger value="m3u" disabled={isLoading}>
+                        <Link2 className="w-3.5 h-3.5 mr-1.5" /> M3U Playlist
+                    </TabsTrigger>
+                </TabsList>
+
+                {/* XTREAM */}
+                <TabsContent value="xtream" className="mt-4">
+                    <form onSubmit={handleXtreamSubmit} className="space-y-3">
+                        <div className="space-y-1">
+                            <label className="text-xs font-medium">Playlist Name</label>
+                            <Input
+                                name="name"
+                                placeholder="e.g. My Premium IPTV"
+                                value={xtreamForm.name}
+                                onChange={handleXtreamChange}
+                                disabled={isLoading}
+                            />
+                        </div>
+
+                        <div className="grid grid-cols-4 gap-2">
+                            <div className="col-span-3 space-y-1">
+                                <label className="text-xs font-medium">Host</label>
+                                <Input
+                                    name="host"
+                                    placeholder="myprovider.com"
+                                    value={xtreamForm.host}
+                                    onChange={handleXtreamChange}
+                                    disabled={isLoading}
+                                    required
+                                />
+                            </div>
+                            <div className="col-span-1 space-y-1">
+                                <label className="text-xs font-medium">Port</label>
+                                <Input
+                                    name="port"
+                                    type="number"
+                                    value={xtreamForm.port}
+                                    onChange={handleXtreamChange}
+                                    disabled={isLoading}
+                                    required
+                                />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                                <label className="text-xs font-medium">Username</label>
+                                <Input
+                                    name="username"
+                                    value={xtreamForm.username}
+                                    onChange={handleXtreamChange}
+                                    disabled={isLoading}
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs font-medium">Password</label>
+                                <Input
+                                    name="password"
+                                    type="password"
+                                    value={xtreamForm.password}
+                                    onChange={handleXtreamChange}
+                                    disabled={isLoading}
+                                    required
+                                />
+                            </div>
+                        </div>
+
+                        <Button type="submit" disabled={isLoading} className="w-full">
+                            {isLoading ? "Checking..." : "Add & Connect"}
+                        </Button>
+                    </form>
+                </TabsContent>
+
+                {/* M3U */}
+                <TabsContent value="m3u" className="mt-4">
+                    <form onSubmit={handleM3USubmit} className="space-y-3">
+                        <div className="space-y-1">
+                            <label className="text-xs font-medium">Playlist Name</label>
+                            <Input
+                                name="name"
+                                placeholder="e.g. My M3U List"
+                                value={m3uForm.name}
+                                onChange={handleM3UChange}
+                                disabled={isLoading}
+                            />
+                        </div>
+
+                        <div className="space-y-1">
+                            <label className="text-xs font-medium">M3U URL</label>
+                            <Input
+                                name="m3uUrl"
+                                type="url"
+                                placeholder="https://example.com/playlist.m3u"
+                                value={m3uForm.m3uUrl}
+                                onChange={handleM3UChange}
+                                disabled={isLoading}
+                                required
+                            />
+                            <p className="text-[10px] text-muted-foreground pt-1">
+                                URL of your .m3u or .m3u8 playlist file
+                            </p>
+                        </div>
+
+                        <Button type="submit" disabled={isLoading} className="w-full">
+                            {isLoading ? "Adding..." : "Add Playlist"}
+                        </Button>
+                    </form>
+                </TabsContent>
+            </Tabs>
+        </div>
     );
 }

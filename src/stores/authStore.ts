@@ -1,20 +1,47 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { Profile } from "@/lib/xtream/types";
 
-// Extend your Profile type to include an ID and a custom Name
-export interface Playlist extends Profile {
+// ─────────────────────────────────────────────────────────────
+// Types live here now (not in xtream/types.ts) because the union
+// is a store-level concept, not an Xtream-API concept.
+// ─────────────────────────────────────────────────────────────
+
+interface BasePlaylist {
     id: string;
     name: string;
 }
+
+export interface XtreamPlaylist extends BasePlaylist {
+    type: "xtream";
+    host: string;
+    port: number;
+    username: string;
+    password: string;
+    status: string;
+    maxConnections?: number;
+}
+
+export interface M3UPlaylist extends BasePlaylist {
+    type: "m3u";
+    m3uUrl: string;
+}
+
+// The discriminated union. TypeScript will now FORCE you to check
+// `playlist.type` before touching type-specific fields.
+export type Playlist = XtreamPlaylist | M3UPlaylist;
+
+// ─────────────────────────────────────────────────────────────
+// Store
+// ─────────────────────────────────────────────────────────────
 
 interface AuthState {
     playlists: Playlist[];
     activeId: string | null;
 
-    // We keep 'profile' so LiveScreen/VodScreen don't break!
-    // It will always reflect the currently active playlist.
-    profile: Playlist | null;
+    // Renamed from `profile`. The old name implied "Xtream credentials";
+    // the new name accurately says "whichever playlist is currently selected,
+    // could be either kind."
+    activePlaylist: Playlist | null;
 
     addPlaylist: (playlist: Playlist) => void;
     removePlaylist: (id: string) => void;
@@ -26,45 +53,65 @@ export const useAuthStore = create<AuthState>()(
         (set) => ({
             playlists: [],
             activeId: null,
-            profile: null,
+            activePlaylist: null,
 
-            addPlaylist: (newPlaylist) => set((state) => {
-                const updatedPlaylists = [...state.playlists, newPlaylist];
-                // If it's their very first playlist, make it active automatically
-                if (updatedPlaylists.length === 1) {
+            addPlaylist: (newPlaylist) =>
+                set((state) => {
+                    const updatedPlaylists = [...state.playlists, newPlaylist];
+                    if (updatedPlaylists.length === 1) {
+                        return {
+                            playlists: updatedPlaylists,
+                            activeId: newPlaylist.id,
+                            activePlaylist: newPlaylist,
+                        };
+                    }
+                    return { playlists: updatedPlaylists };
+                }),
+
+            removePlaylist: (id) =>
+                set((state) => {
+                    const updatedPlaylists = state.playlists.filter((p) => p.id !== id);
+                    if (state.activeId === id) {
+                        const fallback = updatedPlaylists[0] ?? null;
+                        return {
+                            playlists: updatedPlaylists,
+                            activeId: fallback?.id ?? null,
+                            activePlaylist: fallback,
+                        };
+                    }
+                    return { playlists: updatedPlaylists };
+                }),
+
+            setActivePlaylist: (id) =>
+                set((state) => {
+                    const active = state.playlists.find((p) => p.id === id) ?? null;
+                    return { activeId: id, activePlaylist: active };
+                }),
+        }),
+        {
+            name: "auth-storage",
+            version: 1,
+            migrate: (persistedState: any, version: number) => {
+                // v0 → v1: rename `profile` → `activePlaylist`,
+                // backfill `type: "xtream"` on legacy playlists.
+                if (version === 0) {
+                    const playlists = (persistedState?.playlists ?? []).map((p: any) => ({
+                        ...p,
+                        type: p.type ?? "xtream",
+                    }));
+
+                    const activePlaylist = persistedState?.profile
+                        ? { ...persistedState.profile, type: persistedState.profile.type ?? "xtream" }
+                        : (playlists.find((p: any) => p.id === persistedState?.activeId) ?? null);
+
                     return {
-                        playlists: updatedPlaylists,
-                        activeId: newPlaylist.id,
-                        profile: newPlaylist
+                        playlists,
+                        activeId: persistedState?.activeId ?? null,
+                        activePlaylist,
                     };
                 }
-                return { playlists: updatedPlaylists };
-            }),
-
-            removePlaylist: (id) => set((state) => {
-                const updatedPlaylists = state.playlists.filter(p => p.id !== id);
-
-                // If they deleted the active playlist, fallback to another one (or null)
-                let newActiveId = state.activeId;
-                let newProfile = state.profile;
-
-                if (state.activeId === id) {
-                    newActiveId = updatedPlaylists.length > 0 ? updatedPlaylists[0].id : null;
-                    newProfile = updatedPlaylists.length > 0 ? updatedPlaylists[0] : null;
-                }
-
-                return {
-                    playlists: updatedPlaylists,
-                    activeId: newActiveId,
-                    profile: newProfile
-                };
-            }),
-
-            setActivePlaylist: (id) => set((state) => {
-                const active = state.playlists.find(p => p.id === id) || null;
-                return { activeId: id, profile: active };
-            }),
-        }),
-        { name: "auth-storage" }
-    )
+                return persistedState;
+            },
+        },
+    ),
 );

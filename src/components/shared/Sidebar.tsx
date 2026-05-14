@@ -1,29 +1,40 @@
 import { NavLink } from "react-router-dom";
-import {Tv, Film, ListVideo, Settings, StarIcon, RefreshCw} from "lucide-react";
+import { Tv, Film, ListVideo, Settings, StarIcon, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { usePlatformStore } from '@/stores/platformStore';
-import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
+import { usePlatformStore } from "@/stores/platformStore";
+import { useAuthStore } from "@/stores/authStore";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { invalidateM3uCache } from "@/lib/playlistManager";
 
-const items = [
-    { to: "/live", label: "Live TV", icon: Tv },
-    { to: "/vod", label: "Movies", icon: Film },
-    { to: "/series", label: "Series", icon: ListVideo },
-    { to: "/favorites", label: "Favorites", icon: StarIcon }, // Moved above settings
-    { to: "/settings", label: "Settings", icon: Settings },
+const allItems = [
+    { to: "/live", label: "Live TV", icon: Tv, xtreamOnly: false },
+    { to: "/vod", label: "Movies", icon: Film, xtreamOnly: true },
+    { to: "/series", label: "Series", icon: ListVideo, xtreamOnly: true },
+    { to: "/favorites", label: "Favorites", icon: StarIcon, xtreamOnly: false },
+    { to: "/settings", label: "Settings", icon: Settings, xtreamOnly: false },
 ];
 
 export function Sidebar() {
-    // Pull the new function and loading state from your store
-    const refreshPlaylist = usePlatformStore(state => state.refreshPlaylist);
-    const isRefreshing = usePlatformStore(state => state.isRefreshing);
+    const refreshPlaylist = usePlatformStore((s) => s.refreshPlaylist);
+    const isRefreshing = usePlatformStore((s) => s.isRefreshing);
+    const activePlaylist = useAuthStore((s) => s.activePlaylist);
+
+    // Filter nav based on playlist type — M3U has no VOD/Series concept
+    const items = allItems.filter(
+        (item) => !item.xtreamOnly || activePlaylist?.type === "xtream",
+    );
 
     const handleRefresh = () => {
-        // 2. You call the function empty, because the Rust backend already knows who is logged in!
+        // M3U: clear the parse cache so next fetch hits the network
+        if (activePlaylist?.type === "m3u") {
+            invalidateM3uCache(activePlaylist.m3uUrl);
+        }
+
         toast.promise(refreshPlaylist(), {
-            loading: 'Refreshing playlist data...',
-            success: 'Playlist updated successfully!',
-            error: 'Failed to reach the provider. Try again later.',
+            loading: "Refreshing playlist data...",
+            success: "Playlist updated successfully!",
+            error: "Failed to reach the provider. Try again later.",
         });
     };
 
@@ -50,15 +61,15 @@ export function Sidebar() {
                 ))}
             </nav>
             <div className="mt-auto p-4 border-t border-border">
-            <Button
-                variant="ghost"
-                onClick={handleRefresh}
-                disabled={isRefreshing}
-                className="w-full flex items-center justify-start gap-3 text-muted-foreground hover:text-foreground"
-            >
-                <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                <span>Refresh Data</span>
-            </Button>
+                <Button
+                    variant="ghost"
+                    onClick={handleRefresh}
+                    disabled={isRefreshing}
+                    className="w-full flex items-center justify-start gap-3 text-muted-foreground hover:text-foreground"
+                >
+                    <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+                    <span>Refresh Data</span>
+                </Button>
             </div>
         </aside>
     );

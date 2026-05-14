@@ -4,8 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { CategoryList } from "./CategoryList";
 import { ChannelGrid } from "./ChannelGrid";
 import { PlayerModal } from "@/features/player/PlayerModal";
-import { getLiveCategories, getLiveStreams } from "@/lib/xtream/api";
-import { buildStreamUrl } from "@/features/player/streamUrl"; // Adjust path if needed
+import { fetchLiveCategories, fetchLiveChannels } from "@/lib/playlistManager";
+import { buildStreamUrl } from "@/features/player/streamUrl";
 import { useAuthStore } from "@/stores/authStore";
 import { ALL_CATEGORIES_ID } from "@/lib/xtream/constants";
 import { usePlayMedia } from "@/features/player/usePlayMedia";
@@ -14,41 +14,41 @@ export function LiveScreen() {
     const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
 
     const { activeLive, setActiveLive, playLive } = usePlayMedia();
-    const profile = useAuthStore((s) => s.profile);  // keep for URL building in modal
 
+    // Single source of truth — same name everywhere in this file.
+    const activePlaylist = useAuthStore((s) => s.activePlaylist);
 
     const categoriesQuery = useQuery({
-        queryKey: ["live-categories"],
-        queryFn: getLiveCategories,
+        queryKey: ["live-categories", activePlaylist?.id],
+        queryFn: () => {
+            if (!activePlaylist) return [];
+            return fetchLiveCategories(activePlaylist);
+        },
+        enabled: !!activePlaylist,
     });
 
     const streamsQuery = useQuery({
-        queryKey: ["live-streams", selectedCategoryId],
+        queryKey: ["live-streams", selectedCategoryId, activePlaylist?.id],
         queryFn: () => {
-            // For "All", omit category_id — Xtream returns everything
-            if (selectedCategoryId === ALL_CATEGORIES_ID) {
-                return getLiveStreams();
-            }
-            return getLiveStreams(selectedCategoryId ?? undefined);
+            if (!activePlaylist) return [];
+            const catId = selectedCategoryId === ALL_CATEGORIES_ID ? undefined : selectedCategoryId;
+            return fetchLiveChannels(activePlaylist, catId ?? undefined);
         },
-        enabled: !!selectedCategoryId,
+        enabled: !!selectedCategoryId && !!activePlaylist,
     });
 
-    if (categoriesQuery.isLoading) {
-        return (
-            <div className="h-full flex items-center justify-center text-muted-foreground">
-                Loading categories…
-            </div>
-        );
-    }
+    // Now TypeScript narrows correctly because activePlaylist is the discriminated union.
+    const getStreamUrl = () => {
+        if (!activeLive || !activePlaylist) return null;
+        if (activePlaylist.type === "m3u") return activeLive.url ?? null;
+        // Inside this branch TS knows activePlaylist is XtreamPlaylist.
+        return buildStreamUrl(activePlaylist, activeLive.stream_id);
+    };
 
-    if (categoriesQuery.error) {
-        return (
-            <div className="h-full flex items-center justify-center text-destructive">
-                Error loading categories: {(categoriesQuery.error as Error).message}
-            </div>
-        );
-    }
+    if (categoriesQuery.isLoading)
+        return <div className="h-full flex items-center justify-center">Loading categories…</div>;
+    if (categoriesQuery.error)
+        return <div className="h-full flex items-center justify-center text-destructive">Error loading categories</div>;
 
     return (
         <>
@@ -65,33 +65,22 @@ export function LiveScreen() {
                 <div className="flex-1 min-w-0">
                     {!selectedCategoryId && (
                         <div className="h-full flex items-center justify-center text-muted-foreground">
-                            Select a category to browse channels
+                            Select a category
                         </div>
                     )}
-
                     {selectedCategoryId && streamsQuery.isLoading && (
                         <div className="h-full flex items-center justify-center text-muted-foreground">
                             Loading channels…
                         </div>
                     )}
-
-                    {selectedCategoryId && streamsQuery.error && (
-                        <div className="h-full flex items-center justify-center text-destructive">
-                            Error: {(streamsQuery.error as Error).message}
-                        </div>
-                    )}
-
                     {selectedCategoryId && streamsQuery.data && (
-                        <ChannelGrid
-                            streams={streamsQuery.data}
-                            onSelect={playLive}
-                        />
+                        <ChannelGrid streams={streamsQuery.data} onSelect={playLive} />
                     )}
                 </div>
             </div>
 
             <PlayerModal
-                url={activeLive && profile ? buildStreamUrl(profile, activeLive.stream_id) : null}
+                url={getStreamUrl()}
                 title={activeLive?.name || "Live Stream"}
                 icon={activeLive?.stream_icon}
                 onClose={() => setActiveLive(null)}

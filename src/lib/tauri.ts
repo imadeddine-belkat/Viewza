@@ -96,3 +96,7 @@ export async function playInVlc(args: {
 }): Promise<void> {
     return invoke<void>("play_in_vlc", args);
 }
+
+export async function fetchM3u(url: string): Promise<string> {
+    return invoke<string>("fetch_m3u", { url });
+}

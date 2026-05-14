@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 
 // --- SAFETY HELPERS ---
 
-// Safely parse integers even if they come as strings, nulls, or garbage
 pub fn de_int_from_any<'de, D>(deserializer: D) -> Result<i64, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -11,11 +10,11 @@ where
     match v {
         serde_json::Value::Number(n) => Ok(n.as_i64().unwrap_or(0)),
         serde_json::Value::String(s) => Ok(s.parse::<i64>().unwrap_or(0)),
-        _ => Ok(0), // Failsafe: never crash, just default to 0
+        serde_json::Value::Bool(b) => Ok(if b { 1 } else { 0 }),
+        _ => Ok(0),
     }
 }
 
-// Safely parse optional integers
 pub fn de_int_from_any_opt<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -27,11 +26,10 @@ where
         serde_json::Value::String(s) => {
             if s.is_empty() { Ok(None) } else { Ok(s.parse::<i64>().ok()) }
         }
-        _ => Ok(None), // Failsafe: never crash
+        _ => Ok(None),
     }
 }
 
-// Safely parse strings even if the API sends an integer ID by mistake
 pub fn de_string_from_any<'de, D>(deserializer: D) -> Result<String, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -40,6 +38,7 @@ where
     match v {
         serde_json::Value::String(s) => Ok(s),
         serde_json::Value::Number(n) => Ok(n.to_string()),
+        serde_json::Value::Bool(b) => Ok(b.to_string()),
         serde_json::Value::Null => Ok(String::new()),
         _ => Ok(String::new()),
     }
@@ -62,9 +61,9 @@ where
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct UserInfo {
-    #[serde(deserialize_with = "de_string_from_any")]
+    #[serde(default, deserialize_with = "de_string_from_any")]
     pub username: String,
-    #[serde(deserialize_with = "de_string_from_any")]
+    #[serde(default, deserialize_with = "de_string_from_any")]
     pub password: String,
     #[serde(default, deserialize_with = "de_int_from_any")]
     pub auth: i64,
@@ -120,9 +119,9 @@ pub struct Category {
 pub struct LiveStream {
     #[serde(default, deserialize_with = "de_int_from_any_opt")]
     pub num: Option<i64>,
-    #[serde(deserialize_with = "de_string_from_any")]
+    #[serde(default, deserialize_with = "de_string_from_any")]
     pub name: String,
-    #[serde(deserialize_with = "de_string_from_any")]
+    #[serde(default, deserialize_with = "de_string_from_any")]
     pub stream_type: String,
     #[serde(default, deserialize_with = "de_int_from_any")]
     pub stream_id: i64,
@@ -130,10 +129,8 @@ pub struct LiveStream {
     pub stream_icon: String,
     #[serde(default, deserialize_with = "de_string_from_any_opt")]
     pub epg_channel_id: Option<String>,
-    #[serde(deserialize_with = "de_string_from_any")]
+    #[serde(default, deserialize_with = "de_string_from_any")]
     pub category_id: String,
-
-    // --> These were missing the safety helper in your file! <--
     #[serde(default, deserialize_with = "de_int_from_any")]
     pub tv_archive: i64,
     #[serde(default, deserialize_with = "de_int_from_any")]
@@ -144,31 +141,31 @@ pub struct LiveStream {
 pub struct VodStream {
     #[serde(default, deserialize_with = "de_int_from_any_opt")]
     pub num: Option<i64>,
-    #[serde(deserialize_with = "de_string_from_any")]
+    #[serde(default, deserialize_with = "de_string_from_any")]
     pub name: String,
     #[serde(default, deserialize_with = "de_string_from_any")]
-    pub stream_type: String, // Usually "movie"
+    pub stream_type: String,
     #[serde(default, deserialize_with = "de_int_from_any")]
     pub stream_id: i64,
     #[serde(default, deserialize_with = "de_string_from_any")]
     pub stream_icon: String,
-    #[serde(deserialize_with = "de_string_from_any")]
+    #[serde(default, deserialize_with = "de_string_from_any")]
     pub category_id: String,
     #[serde(default, deserialize_with = "de_string_from_any")]
-    pub container_extension: String, // e.g., "mp4", "mkv"
+    pub container_extension: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SeriesItem {
     #[serde(default, deserialize_with = "de_int_from_any_opt")]
     pub num: Option<i64>,
-    #[serde(deserialize_with = "de_string_from_any")]
+    #[serde(default, deserialize_with = "de_string_from_any")]
     pub name: String,
     #[serde(default, deserialize_with = "de_int_from_any")]
     pub series_id: i64,
     #[serde(default, deserialize_with = "de_string_from_any")]
     pub cover: String,
-    #[serde(deserialize_with = "de_string_from_any")]
+    #[serde(default, deserialize_with = "de_string_from_any")]
     pub category_id: String,
 }
 
@@ -194,14 +191,20 @@ pub struct EpgListing {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct EpgResponse {
+    #[serde(default)]
     pub epg_listings: Vec<EpgListing>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SeriesInfoResponse {
-    // We use Value here because IPTV panels randomly send either [] or {}
-    // We will parse this safely in the React frontend!
+    #[serde(default = "default_value")]
     pub episodes: serde_json::Value,
+    #[serde(default = "default_value")]
     pub info: serde_json::Value,
+    #[serde(default = "default_value")]
     pub seasons: serde_json::Value,
+}
+
+fn default_value() -> serde_json::Value {
+    serde_json::Value::Null
 }

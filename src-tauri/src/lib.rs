@@ -2,6 +2,7 @@ mod state;
 mod xtream;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 mod proxy;
+mod m3u;
 
 use state::{AppState, AppStateInner, Session};
 use xtream::client::{XtreamClient, XtreamError};
@@ -141,6 +142,7 @@ pub fn run() {
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let builder = builder.invoke_handler(tauri::generate_handler![
         xtream_login,
+        m3u::fetch_m3u,
         xtream_set_session,
         xtream_clear_session,
         xtream_get_live_categories,

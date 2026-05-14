@@ -1,5 +1,3 @@
-import type { Profile } from "@/lib/xtream/types";
-
 export type StreamFormat = "m3u8" | "ts";
 
 /**
@@ -11,19 +9,25 @@ export type StreamFormat = "m3u8" | "ts";
  *
  * HLS is more reliable in browser/webview playback. Try it first.
  */
+// streamUrl.ts
+interface StreamCredentials {
+    host: string;
+    port: number;
+    username: string;
+    password: string;
+}
+
 export function buildStreamUrl(
-    profile: Profile,
+    creds: StreamCredentials,
     streamId: string | number,
     type: "live" | "movie" | "series" = "live",
-    extension: string = "ts"
+    extension: string = "ts",
 ) {
-    const { host, port, username, password } = profile;
+    const { host, port, username, password } = creds;
     const baseUrl = `http://${host}:${port}`;
 
     if (type === "live") {
         return `${baseUrl}/${username}/${password}/${streamId}.${extension}`;
-    } else {
-        // VODs and Series require the type injected into the URL path
-        return `${baseUrl}/${type}/${username}/${password}/${streamId}.${extension}`;
     }
+    return `${baseUrl}/${type}/${username}/${password}/${streamId}.${extension}`;
 }

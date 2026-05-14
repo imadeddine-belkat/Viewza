@@ -10,8 +10,8 @@ import { useAuthStore } from "@/stores/authStore";
 import {FavoritesScreen} from "@/features/favorites/FavoritesScreen.tsx";
 
 function ProtectedRoute() {
-    const profile = useAuthStore((s) => s.profile);
-    if (!profile) return <Navigate to="/login" replace />;
+    const activePlaylist = useAuthStore((s) => s.activePlaylist);
+    if (!activePlaylist) return <Navigate to="/login" replace />;
     return <Outlet />;
 }
 
