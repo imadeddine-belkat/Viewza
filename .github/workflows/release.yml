@@ -40,10 +40,13 @@ jobs:
         env:
           # This token is automatically provided by GitHub Actions
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           # Automatically uses the version from your tauri.conf.json
-          tagName: v__VERSION__
-          releaseName: 'Viewza v__VERSION__'
-          releaseBody: 'Automated release for Viewza.'
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Viewza ${{ github.ref_name }}'
+          releaseBody: 'See CHANGELOG.md for what changed.'
           releaseDraft: false
           prerelease: false
+          includeUpdaterJson: true
