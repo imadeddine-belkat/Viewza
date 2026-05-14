@@ -29,15 +29,10 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Write updater private key
-        shell: pwsh
-        run: |
-          Set-Content -Path ".\viewza-updater.key" -Value "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" -NoNewline
-
       - name: Build signed Tauri app
         shell: pwsh
         env:
-          TAURI_SIGNING_PRIVATE_KEY_PATH: .\viewza-updater.key
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npm run tauri build
 
