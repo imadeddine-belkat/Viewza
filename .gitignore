@@ -25,4 +25,5 @@ src-tauri/target/
 *.sln
 *.sw?
 
-viewza-updater.key
+*.key
+*.key.pub
