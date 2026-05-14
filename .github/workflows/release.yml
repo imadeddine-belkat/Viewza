@@ -35,15 +35,18 @@ jobs:
       - name: Install frontend dependencies
         run: npm install
 
+      - name: Write private key
+        shell: bash
+        run: |
+          echo "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" > tauri.key
+
       - name: Build and Publish Tauri app
         uses: tauri-apps/tauri-action@v0.5.20
         env:
-          # This token is automatically provided by GitHub Actions
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PATH: tauri.key
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          # Automatically uses the version from your tauri.conf.json
           tagName: ${{ github.ref_name }}
           releaseName: 'Viewza ${{ github.ref_name }}'
           releaseBody: 'See CHANGELOG.md for what changed.'
