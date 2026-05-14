@@ -3,6 +3,7 @@ use crate::xtream::types::{
 };
 use reqwest::Client;
 use thiserror::Error;
+use urlencoding::encode;
 
 #[derive(Debug, Error)]
 pub enum XtreamError {
@@ -38,10 +39,10 @@ impl XtreamClient {
     pub fn new() -> Self {
         Self {
             http: Client::builder()
-                .user_agent("iptv-app/0.1")
-                .timeout(std::time::Duration::from_secs(15))
-                .build()
-                .expect("reqwest client builds"),
+            .user_agent("IPTVSmartersPro") // <-- Pretend to be IPTV Smarters
+            .timeout(std::time::Duration::from_secs(15))
+            .build()
+            .expect("reqwest client builds"),
         }
     }
 
@@ -53,7 +54,9 @@ impl XtreamClient {
         password: &str,
     ) -> Result<LoginResponse, XtreamError> {
         let url = format!(
-            "http://{host}:{port}/player_api.php?username={username}&password={password}"
+            "http://{host}:{port}/player_api.php?username={}&password={}&action=get_live_categories",
+            encode(username),
+            encode(password)
         );
 
         let resp = self.http.get(&url).send().await?;
@@ -69,22 +72,34 @@ impl XtreamClient {
     }
 
     pub async fn get_live_categories(
-        &self,
-        host: &str,
-        port: u16,
-        username: &str,
-        password: &str,
-    ) -> Result<Vec<Category>, XtreamError> {
-        let url = format!(
-            "http://{host}:{port}/player_api.php?username={username}&password={password}&action=get_live_categories"
-        );
+            &self,
+            host: &str,
+            port: u16,
+            username: &str,
+            password: &str,
+        ) -> Result<Vec<Category>, XtreamError> {
+            let url = format!(
+                "http://{host}:{port}/player_api.php?username={username}&password={password}&action=get_live_categories"
+            );
 
-        let resp = self.http.get(&url).send().await?;
-        let body = resp.text().await?;
+            let resp = self.http.get(&url).send().await?;
+            let body = resp.text().await?;
 
-        let parsed: Vec<Category> = serde_json::from_str(&body)?;
-        Ok(parsed)
-    }
+            // 1. Check if the body is completely empty
+            if body.trim().is_empty() {
+                println!("Xtream warning: server returned empty body for live categories");
+                return Ok(Vec::new()); // Return empty list instead of crashing
+            }
+
+            // 2. Attempt to parse, but print the raw body if it fails
+            match serde_json::from_str::<Vec<Category>>(&body) {
+                Ok(parsed) => Ok(parsed),
+                Err(e) => {
+                    println!("Xtream parse error! Raw response body:\n{}", body);
+                    Err(XtreamError::Parse(e))
+                }
+            }
+        }
 
     pub async fn get_live_streams(
         &self,
