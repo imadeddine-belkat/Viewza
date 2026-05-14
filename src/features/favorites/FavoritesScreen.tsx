@@ -12,7 +12,7 @@ import type { SeriesItem } from "@/lib/xtream/types";
 
 export function FavoritesScreen() {
     const activeId = useAuthStore((s) => s.activeId);
-    const profile = useAuthStore((s) => s.profile);
+    const activePlaylist = useAuthStore((s) => s.activePlaylist);
     const { live, vod, series, toggleLive, toggleVod, toggleSeries } = useFavoriteStore();
 
     const {
@@ -185,9 +185,9 @@ export function FavoritesScreen() {
             {/* Player modals */}
             <PlayerModal
                 url={
-                    activeLive && profile
-                        ? buildStreamUrl(profile, activeLive.stream_id)
-                        : null
+                    activeLive && activePlaylist?.type === "xtream"
+                        ? buildStreamUrl(activePlaylist, activeLive.stream_id)
+                        : activeLive?.url ?? null
                 }
                 title={activeLive?.name || "Live Stream"}
                 icon={activeLive?.stream_icon}
@@ -196,9 +196,9 @@ export function FavoritesScreen() {
 
             <PlayerModal
                 url={
-                    activeMovie && profile
+                    activeMovie && activePlaylist?.type === "xtream"
                         ? buildStreamUrl(
-                            profile,
+                            activePlaylist,
                             activeMovie.stream_id,
                             "movie",
                             activeMovie.container_extension || "mp4",

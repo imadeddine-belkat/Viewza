@@ -7,20 +7,20 @@ import { useAuthStore } from "@/stores/authStore";
 import { xtreamSetSession } from "@/lib/tauri";
 
 export function AppShell() {
-    // 1. Grab the active profile from your store
-    const profile = useAuthStore((state) => state.profile);
+    const activePlaylist = useAuthStore((state) => state.activePlaylist);
 
-    // 2. Sync the session to Rust whenever the app opens or the profile changes
+    // Sync the Rust session whenever the active playlist changes.
+    // Only Xtream has a session — M3U is stateless.
     useEffect(() => {
-        if (profile) {
+        if (activePlaylist?.type === "xtream") {
             xtreamSetSession({
-                host: profile.host,
-                port: profile.port,
-                username: profile.username,
-                password: profile.password,
+                host: activePlaylist.host,
+                port: activePlaylist.port,
+                username: activePlaylist.username,
+                password: activePlaylist.password,
             }).catch((err) => console.error("Failed to set Rust session:", err));
         }
-    }, [profile]);
+    }, [activePlaylist]);
 
     return (
         <div className="flex h-screen bg-background text-foreground">
